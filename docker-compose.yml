@@ -1,0 +1,38 @@
+services:
+  claude-sandbox:
+    build: .
+    image: claude-sandbox:latest
+    container_name: claude-sandbox
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SANDBOX_IDLE_TIMEOUT: ${SANDBOX_IDLE_TIMEOUT:-1800}
+      # Fixed SSH agent path that exec'd sessions inherit. The entrypoint
+      # populates it from whichever source is active (macOS socat bridge via
+      # SSH_AGENT_BRIDGE_PORT, or a directly-forwarded /ssh-agent socket).
+      SSH_AUTH_SOCK: /run/agent/ssh.sock
+      # Opt-in macOS agent bridge ports (match macos-agent-bridge.sh). Sourced
+      # from .env via env_file; unset = bridge off.
+    # Reach the Docker host (for the macOS socat bridge); host-gateway also makes
+    # host.docker.internal resolvable on Linux hosts.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    working_dir: /code
+    restart: "no"
+    volumes:
+      # Whole code tree, read-write. Sessions are scoped to a subfolder by the
+      # working dir passed to `docker compose exec` (see run.sh). The rest of the
+      # host is not mounted.
+      - ${SANDBOX_ROOT:?SANDBOX_ROOT must be set — run via ./run.sh}:/code
+      - ./config:/etc/claude-sandbox:ro
+      # Shared, browsable Claude home (onboarding, theme, history, credentials).
+      # Host path defaults to /Users/claude; override with CLAUDE_HOME_HOST.
+      - ${CLAUDE_HOME_HOST:-/Users/claude}:/home/claude
+      # SSH agent forwarding. macOS Docker Desktop exposes the host agent at
+      # /run/host-services/ssh-auth.sock; on a Linux host set SSH_AUTH_SOCK_HOST
+      # to your agent socket ($SSH_AUTH_SOCK).
+      - ${SSH_AUTH_SOCK_HOST:-/run/host-services/ssh-auth.sock}:/ssh-agent

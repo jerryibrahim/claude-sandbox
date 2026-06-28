@@ -1,0 +1,17 @@
+# Denylisted command patterns (POSIX extended regex), matched against the
+# Bash command string. One pattern per line; # comments and blanks ignored.
+
+# Recursive deletes of root or home
+rm[[:space:]]+(-[a-zA-Z]*[[:space:]]+)*-?[a-zA-Z]*r[a-zA-Z]*f?[[:space:]]+/([[:space:]"';*]|$)
+rm[[:space:]]+-rf[[:space:]]+~
+# Raw writes to block devices
+(^|[[:space:]])dd[[:space:]]+.*of=/dev/
+[[:space:]]>[[:space:]]*/dev/sd[a-z]
+mkfs(\.[a-z0-9]+)?[[:space:]]
+# Pipe remote content straight into a shell
+curl[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(ba)?sh
+wget[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(ba)?sh
+# Fork bomb
+:\(\)[[:space:]]*\{[[:space:]]*:\|:
+# Reading common credential stores
+cat[[:space:]].*(/\.aws/credentials|/\.ssh/id_|/\.netrc)

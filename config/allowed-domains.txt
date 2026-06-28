@@ -1,0 +1,42 @@
+# Egress allowlist for the Claude sandbox firewall.
+# One hostname per line. Lines starting with # and blank lines are ignored.
+# Wildcards are NOT supported (hosts are resolved to IPs); list concrete hosts.
+
+# Docker host gateway — only used for the macOS socat agent bridge
+# (SSH_AGENT_BRIDGE_PORT / GPG_AGENT_BRIDGE_PORT). Harmless if the bridge is off.
+host.docker.internal
+
+# Anthropic
+api.anthropic.com
+# Claude subscription auth (OAuth token refresh / login). Needed when using
+# CLAUDE_CODE_OAUTH_TOKEN or mounted subscription credentials, not for API-key auth.
+claude.ai
+console.anthropic.com
+
+# Github
+# GitHub serves github.com / api.github.com / codeload from a
+# large, rotating IP pool, so allow the published CIDR ranges (from
+# https://api.github.com/meta — api/git/web) rather than point-in-time
+# resolution, which caused i/o timeouts to non-pinned IPs.
+github.com
+api.github.com
+codeload.github.com
+objects.githubusercontent.com
+raw.githubusercontent.com
+140.82.112.0/20
+143.55.64.0/20
+185.199.108.0/22
+192.30.252.0/22
+
+# Package registries
+registry.npmjs.org
+
+# Go modules
+proxy.golang.org
+sum.golang.org
+
+# Atlassian / Jira
+api.atlassian.com
+# Atlassian remote MCP server (http transport) + its OAuth host
+mcp.atlassian.com
+auth.atlassian.com
