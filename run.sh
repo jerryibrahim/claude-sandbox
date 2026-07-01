@@ -2,6 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Host directory mounted read-write at /code. Resolution: shell env > .env >
+# default. docker compose also reads .env for the volume interpolation; we read
+# it here too so run.sh's own path checks (resolve_workdir) agree with the mount.
+# Must be an absolute path — the .env value is used verbatim (no ~/$HOME expansion).
+SANDBOX_ROOT="${SANDBOX_ROOT:-$(grep -E '^SANDBOX_ROOT=' "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- || true)}"
 SANDBOX_ROOT="${SANDBOX_ROOT:-$HOME/code}"
 export SANDBOX_ROOT
 # Host directory bind-mounted as Claude's home (persistent state/backups).
