@@ -180,20 +180,26 @@ over TCP loopback instead. One-time:
    `mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts`.
 
 The chain is: container `ssh`/`gpg` → `/run/agent/ssh.sock` &
-`~/.gnupg/S.gpg-agent` → `host.docker.internal:<port>` → host `socat` →
+`/run/agent/S.gpg-agent` → `host.docker.internal:<port>` → host `socat` →
 gpg-agent → YubiKey (PIN/touch on the Mac). Keys never enter the container; the
 host-gateway is allowlisted so the bridge passes the firewall.
 
 **Verify:** `ssh-add -l` in a session should list your card key (`cardno:…`).
 
 **Notes / gotchas:**
-- The container-side relays are started by the entrypoint and persist for the
-  container's life. The gpg relay runs as the `claude` user with no `mode=`/
-  `user=` socat options — `chmod`/`chown` on a socket fails with `EINVAL` on the
-  Docker Desktop (virtiofs) bind mount, which would otherwise kill it. (Handled
-  in `entrypoint.sh`; noted here for the next rebuild / Linux VM.)
+- Both container-side relays are started by the entrypoint and persist for the
+  container's life. Each relay socket lives on the container-local `/run/agent`,
+  **not** the bind-mounted home: virtiofs cannot `unlink()` a socket file, so a
+  stale socket left in `~/.gnupg` by a prior run would break the relay's
+  `unlink-early` on the next start. gpg is pointed at its relay via an Assuan
+  redirect file (a *regular* file, which virtiofs can rewrite in place) at
+  `~/.gnupg/S.gpg-agent` containing `%Assuan%` + `socket=/run/agent/S.gpg-agent`.
 - The host bridge (`macos-agent-bridge.sh`) must be running whenever a session
   uses the agent; if it isn't, `ssh-add -l` errors through the relay.
+- If you upgraded from an older image that put the gpg socket directly in
+  `~/.gnupg`, a stale socket may block the new redirect file — the entrypoint
+  logs a `WARNING`. Remove it from the host and restart:
+  `rm -f "$CLAUDE_HOME_HOST/.gnupg/S.gpg-agent"`.
 
 ### Commit signing (GPG)
 

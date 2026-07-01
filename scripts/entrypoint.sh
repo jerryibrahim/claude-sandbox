@@ -48,14 +48,23 @@ elif [ -S /ssh-agent ]; then
         "UNIX-CONNECT:/ssh-agent" &
 fi
 if [ -n "${GPG_AGENT_BRIDGE_PORT:-}" ]; then
-  # macOS: bridge to the host gpg-agent extra socket for commit signing. gpg in
-  # the container talks to its standard agent socket under GNUPGHOME. unlink-early
-  # clears a stale socket left in the persistent home by a previous run.
+  # macOS: bridge to the host gpg-agent extra socket for commit signing.
+  # The relay socket lives on the container-local /run/agent (like ssh.sock),
+  # NOT the bind-mounted home: virtiofs cannot unlink() a socket file, so a stale
+  # socket left in ~/.gnupg by a prior run would break socat's unlink-early on the
+  # next start. gpg reaches the relay via an Assuan redirect file — a *regular*
+  # file (which virtiofs can rewrite in place) at gpg's default agent-socket path.
   echo "entrypoint: gpg-agent bridge -> host.docker.internal:${GPG_AGENT_BRIDGE_PORT}"
   install -d -o claude -g claude -m 0700 /home/claude/.gnupg
-  # Run as claude so the socket is claude-owned/connectable. No mode=/user=:
-  # socat's chmod/chown on a socket fails with EINVAL on the virtiofs bind mount.
-  gosu claude socat "UNIX-LISTEN:/home/claude/.gnupg/S.gpg-agent,unlink-early,fork" \
+  gpg_redirect=/home/claude/.gnupg/S.gpg-agent
+  if [ -S "$gpg_redirect" ]; then
+    # Legacy layout: a real socket sits here and virtiofs won't let us replace it.
+    echo "entrypoint: WARNING stale gpg socket at ~/.gnupg/S.gpg-agent — remove it on the host (rm -f \"\$CLAUDE_HOME_HOST/.gnupg/S.gpg-agent\") and restart" >&2
+  else
+    printf '%%Assuan%%\nsocket=/run/agent/S.gpg-agent\n' > "$gpg_redirect"
+    chown claude:claude "$gpg_redirect"
+  fi
+  socat "UNIX-LISTEN:/run/agent/S.gpg-agent,unlink-early,fork,mode=0600,user=claude" \
         "TCP:host.docker.internal:${GPG_AGENT_BRIDGE_PORT}" &
 fi
 
